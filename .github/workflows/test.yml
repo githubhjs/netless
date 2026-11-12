@@ -21,3 +21,44 @@ jobs:
         run: make
       - name: Test
         run: make test
+  windows-build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            arch: x64
+            target: windows-x86_64
+          - runner: windows-11-arm
+            arch: arm64
+            target: windows-aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Build launcher and adversarial network probe
+        shell: pwsh
+        run: ./scripts/build-windows.ps1
+      - name: Probe IPv4, IPv6, TCP, UDP, DNS, raw sockets, and descendant inheritance
+        shell: pwsh
+        run: ./tests/test_windows.ps1
+  openbsd-build-and-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run adversarial network tests in OpenBSD
+        uses: vmactions/openbsd-vm@v1
+        with:
+          prepare: pkg_add gmake python%3.12
+          run: gmake clean all test
+  freebsd-build-and-test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run adversarial network tests in FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          prepare: pkg install -y gmake python3
+          run: gmake clean all test

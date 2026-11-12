@@ -1,6 +1,6 @@
 # netless
 
-Run a Unix-like command with kernel-enforced denial of network access. Network access is denied by default; this program has no option to turn it back on.
+Run a command with OS-enforced restrictions on network access. Network access is denied by default; this program has no option to turn it back on.
 
 ```sh
 make
@@ -15,7 +15,7 @@ On Linux, additional syscalls from the built-in table can be denied by name:
 ./build/netless --deny-syscall ptrace --deny-syscall mount -- COMMAND ARGUMENTS
 ```
 
-The launcher needs the platform's native compiler and kernel sandbox support. Build with `make`; install with `sudo make install` (default `/usr/local/bin`).
+The launcher needs the platform's native compiler and sandbox support. On Linux and macOS build with `make`; install with `sudo make install` (default `/usr/local/bin`). On Windows, run `scripts/build-windows.ps1` from a Visual Studio Developer PowerShell.
 
 ## Platform support
 
@@ -23,12 +23,12 @@ The launcher needs the platform's native compiler and kernel sandbox support. Bu
 |---|---|---|---|
 | Linux | seccomp-BPF; blocks socket and `io_uring` syscalls | x86-64, AArch64 | Implemented and CI-tested |
 | macOS | Seatbelt sandbox via `sandbox-exec`; denies `network*` and `system-socket`; descendants inherit policy | Intel x86-64, Apple Silicon arm64 | Implemented and CI-tested; binaries published in releases |
-| OpenBSD | `pledge` without `inet`, `dns`, or `unix`; same promises applied to exec descendants | Native OpenBSD architectures | Adapter source included; needs native OpenBSD CI validation before binary release |
-| FreeBSD | — | — | Not supported yet: Capsicum capability mode alone does not deny creation of new network sockets |
+| OpenBSD | `pledge` without `inet`, `dns`, or `unix`; same promises applied to exec descendants | x86-64 release; other native architectures may build | Implemented and tested in an OpenBSD VM; release binary available |
+| FreeBSD | Jail with IPv4/IPv6 disabled and raw sockets denied | x86-64 release | Best effort; requires root, leaves AF_LOCAL available, and uses the host filesystem as the jail root |
 | Solaris / illumos, NetBSD, other Unix | — | — | Not supported yet; no verified kernel enforcement adapter |
-| Windows | — | — | Separate implementation required; out of scope for this release |
+| Windows 10/11 | AppContainer with no network capabilities; descendant processes inherit the container identity | x86-64 and ARM64 releases; tested on Windows Server 2022 x64 and Windows 11 ARM64 | Best effort; API baseline supports Windows 10/11, but Windows 10 is not yet a CI image; AppContainer also restricts filesystem, registry, and IPC access |
 
-“Unix-like” is not one portable security API. This project only claims support for adapters that use an OS-enforced policy inherited by descendants. Unsupported systems fail at build selection instead of falling back to a weak wrapper.
+“Unix-like” is not one portable security API. Linux, macOS, and OpenBSD use inherited kernel policies to deny network operations. FreeBSD and Windows use platform sandboxes with additional limitations; see the table above. Unsupported systems fail at build selection instead of silently falling back to an unconfined launch.
 
 ## What it enforces
 
@@ -36,9 +36,11 @@ The launcher needs the platform's native compiler and kernel sandbox support. Bu
 - Denies `io_uring` setup, entry, and registration, so it cannot be used to submit socket operations through the asynchronous interface.
 - Denies `pidfd_getfd` and `ptrace`; closes inherited file descriptors above stderr; refuses to start if stdin, stdout, or stderr is a socket.
 - Sets `no_new_privs` before installing the filter. If setting the flag or installing the filter fails, the target command is never executed.
-- Linux filters are inherited by forked/cloned children and survive exec, as enforced by the kernel. OpenBSD applies pledge exec promises to descendants. macOS Seatbelt restrictions are inherited by child processes.
+- Linux filters are inherited by forked/cloned children and survive exec, as enforced by the kernel. OpenBSD applies pledge exec promises to descendants. macOS Seatbelt restrictions are inherited by child processes. Windows child processes inherit their AppContainer identity.
+- FreeBSD jails have IPv4 and IPv6 disabled and raw sockets disabled. AF_LOCAL remains available, and the jail sees the host root filesystem, so local Unix-domain sockets can reach host services that may themselves provide network access. Treat this mode as best effort only, especially for untrusted commands.
+- Windows uses a fresh AppContainer identity per launch and grants no network capabilities. The Windows kernel isolates the command and its descendants, but AppContainer also restricts filesystem, registry, and IPC access. The launcher passes only standard handles, refuses socket-backed standard handles, and does not grant loopback exemptions. It does not install WFP filters or a custom kernel driver, so it does not promise that every socket creation or local port bind syscall fails; the Windows tests exercise both bind and outbound operations. Explicit per-AppContainer WFP filters would require elevated filter-management permission and are not installed by this project.
 
-This restricts network access for the launched process tree under each supported OS policy. It does not sandbox filesystem access, resource use, or interaction with a separate privileged broker/service that independently performs network operations on request. Keep untrusted workloads away from cooperating host services and do not treat this as a full container or VM boundary.
+Linux, macOS, and OpenBSD deny network socket operations in the launched process tree under their OS-enforced policies. Windows AppContainer and FreeBSD jail provide best-effort isolation with the limitations described above. No backend blocks a separate privileged broker/service that independently performs network operations on request. Keep untrusted workloads away from cooperating host services and do not treat this as a full container or VM boundary.
 
 The program does not modify firewall rules, routes, DNS configuration, network namespaces, or host networking. No root privilege is required to run it when the kernel permits an unprivileged process to set `no_new_privs` and seccomp filters.
 
@@ -48,7 +50,18 @@ The program does not modify firewall rules, routes, DNS configuration, network n
 make test
 ```
 
-Tests exercise DNS/socket denial, IPv4/IPv6/raw socket creation, inherited descriptor closure, and filter inheritance across fork and exec. A passing local test is evidence for that kernel/build; review the code and kernel configuration before relying on it in a high-assurance deployment.
+Tests attempt DNS resolution, IPv4/IPv6 loopback binds, outbound TCP connections, UDP sends, raw socket creation, inherited descriptor closure, and descendant process network access. Windows uses a dedicated Winsock probe and tests child-process inheritance. BSD CI runs in native virtual machines; Linux/macOS and Windows CI run on their respective hosted runners. A passing test is evidence for that specific OS image and architecture; review the code and OS configuration before relying on it in a high-assurance deployment.
+
+## Windows build and test
+
+From a Visual Studio Developer PowerShell on Windows 10 or 11:
+
+```powershell
+./scripts/build-windows.ps1
+./tests/test_windows.ps1
+```
+
+AppContainer requires no administrator rights for the network restriction itself. Programs that need to read or execute files outside locations already accessible to AppContainer identities may need explicit ACL changes; netless does not modify those ACLs automatically. Windows CI grants read/execute access only to its disposable test directory so it can run the adversarial probe.
 
 ## References
 
@@ -58,6 +71,10 @@ Tests exercise DNS/socket denial, IPv4/IPv6/raw socket creation, inherited descr
 - [OpenBSD pledge(2)](https://man.openbsd.org/pledge)
 - [Apple App Sandbox inheritance](https://developer.apple.com/documentation/xcode/configuring-the-macos-app-sandbox)
 - [FreeBSD Capsicum](https://man.freebsd.org/cgi/man.cgi?query=capsicum&sektion=4)
+- [FreeBSD jail(8)](https://man.freebsd.org/cgi/man.cgi?query=jail&sektion=8)
+- [Microsoft: Launch an AppContainer](https://learn.microsoft.com/en-us/windows/win32/secauthz/implementing-an-appcontainer)
+- [Microsoft: SECURITY_CAPABILITIES](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-security_capabilities)
+- [Microsoft: AppContainer for legacy applications](https://learn.microsoft.com/en-us/windows/win32/secauthz/appcontainer-for-legacy-applications-)
 
 ## License
 

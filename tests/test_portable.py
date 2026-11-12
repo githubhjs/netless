@@ -23,6 +23,33 @@ class PortableSandboxTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(p.stdout.splitlines(), ["blocked", "blocked"])
 
+    def test_outbound_tcp_udp_and_raw_socket_attempts_are_blocked(self):
+        code = """import socket
+checks = [
+    ('tcp4', socket.AF_INET, socket.SOCK_STREAM, ('1.1.1.1', 443)),
+    ('udp4', socket.AF_INET, socket.SOCK_DGRAM, ('8.8.8.8', 53)),
+    ('tcp6', socket.AF_INET6, socket.SOCK_STREAM, ('2606:4700:4700::1111', 443, 0, 0)),
+]
+for name, family, kind, address in checks:
+    s = None
+    try:
+        s = socket.socket(family, kind)
+        if kind == socket.SOCK_STREAM: s.settimeout(2); s.connect(address)
+        else: s.sendto(b'netless-probe', address)
+        print(name + ':ALLOWED')
+    except OSError: print(name + ':blocked')
+    finally:
+        try: s.close()
+        except (OSError, AttributeError): pass
+try:
+    socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+    print('raw:ALLOWED')
+except OSError: print('raw:blocked')
+"""
+        p = self.run_child(code)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(p.stdout.splitlines(), ["tcp4:blocked", "udp4:blocked", "tcp6:blocked", "raw:blocked"])
+
     def test_dns_lookup_cannot_open_network_socket(self):
         p = self.run_child("import socket\ntry: socket.getaddrinfo('example.com',80); print('BAD')\nexcept OSError: print('blocked')\n")
         self.assertEqual(p.returncode, 0, p.stderr)

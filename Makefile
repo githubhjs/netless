@@ -13,6 +13,8 @@ LDLIBS := -lsandbox
 CFLAGS += -Wno-deprecated-declarations
 else ifeq ($(UNAME_S),OpenBSD)
 PLATFORM_SRC := src/netless_openbsd.c
+else ifeq ($(UNAME_S),FreeBSD)
+PLATFORM_SRC := src/netless_freebsd.c
 else
 $(error Unsupported OS $(UNAME_S): network isolation backend not implemented)
 endif

@@ -29,8 +29,65 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}.tar.gz
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            arch: x64
+            target: netless-windows-x86_64
+          - runner: windows-11-arm
+            arch: arm64
+            target: netless-windows-aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Build and test
+        shell: pwsh
+        run: |
+          ./scripts/build-windows.ps1
+          ./tests/test_windows.ps1
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path build/netless.exe -DestinationPath '${{ matrix.target }}.zip'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ matrix.target }}.zip
+  openbsd:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test in OpenBSD
+        uses: vmactions/openbsd-vm@v1
+        with:
+          prepare: pkg_add gmake python%3.12
+          run: gmake clean all test && tar -czf netless-openbsd-x86_64.tar.gz -C build netless
+          copyback: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: netless-openbsd-x86_64
+          path: netless-openbsd-x86_64.tar.gz
+  freebsd:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test in FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          prepare: pkg install -y gmake python3
+          run: gmake clean all test && tar -czf netless-freebsd-x86_64.tar.gz -C build netless
+          copyback: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: netless-freebsd-x86_64
+          path: netless-freebsd-x86_64.tar.gz
   publish:
-    needs: build
+    needs: [build, windows, openbsd, freebsd]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/download-artifact@v4
