@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
         perror("netless: closing inherited descriptors");
         return 125;
     }
-    static char profile[] = "(version 1) (allow default) (deny network*) (deny system-socket)";
+    static char profile[] = "(version 1) (deny network*) (deny system-socket) (allow default)";
     char **sandbox_argv = calloc((size_t)argc + 4, sizeof(char *));
     if (!sandbox_argv) { perror("netless: calloc"); return 125; }
     sandbox_argv[0] = (char *)"sandbox-exec";
