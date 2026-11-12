@@ -30,7 +30,7 @@
 #endif
 
 #define MAX_EXTRA 32
-#define MAX_FILTER 128
+#define MAX_FILTER 256
 #define ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
 
 struct blocked_call { const char *name; int number; };
@@ -117,6 +117,12 @@ static int install_filter(const int *extra, size_t extra_count) {
     code[n++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,
                                             __X32_SYSCALL_BIT, 0, 1);
     code[n++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_THREAD);
+    /* Kernels before 5.4 also accepted the old x32 range without its ABI bit. */
+    for (uint32_t nr = 512; nr <= 547; ++nr) {
+        code[n++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, nr, 0, 1);
+        code[n++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K,
+                                                SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA));
+    }
 #endif
     for (size_t i = 0; i < ARRAY_LEN(network_calls); ++i) {
         code[n++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,

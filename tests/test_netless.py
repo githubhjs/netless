@@ -34,6 +34,11 @@ class NetlessTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(p.stdout.strip(), "1")
 
+    def test_filter_is_inherited_through_system_shell(self):
+        code = "import os\nstatus=os.system(\"python3 -c 'import socket; socket.socket()'\")\nassert status != 0, status\n"
+        p = self.run_child(code)
+        self.assertEqual(p.returncode, 0, p.stderr)
+
     def test_inherited_socket_fd_is_rejected(self):
         with socket.socket() as sock:
             fd = sock.fileno()
@@ -46,6 +51,11 @@ class NetlessTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         bad = subprocess.run([str(BIN), "--deny-syscall", "not_a_syscall", "--", "true"], capture_output=True)
         self.assertEqual(bad.returncode, 2)
+
+    @unittest.skipUnless(os.uname().machine == "x86_64", "x32 compatibility syscall range is x86_64-only")
+    def test_legacy_x32_syscall_numbers_are_blocked(self):
+        p = self.run_child("import ctypes, errno\nlibc=ctypes.CDLL(None, use_errno=True)\nassert libc.syscall(512) == -1\nassert ctypes.get_errno() == errno.EPERM\n")
+        self.assertEqual(p.returncode, 0, p.stderr)
 
 
 if __name__ == "__main__":
