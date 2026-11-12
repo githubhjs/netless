@@ -16,6 +16,11 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#ifndef __X32_SYSCALL_BIT
+/* Kept out of some musl/kernel-header combinations despite being an ABI constant. */
+#define __X32_SYSCALL_BIT 0x40000000U
+#endif
+
 #if defined(__x86_64__)
 #define NETLESS_AUDIT_ARCH AUDIT_ARCH_X86_64
 #elif defined(__aarch64__)
