@@ -1,6 +1,5 @@
 #define _DARWIN_C_SOURCE
 #include <errno.h>
-#include <sandbox.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -43,13 +42,15 @@ int main(int argc, char **argv) {
         perror("netless: closing inherited descriptors");
         return 125;
     }
-    char *error = NULL;
-    if (sandbox_init("(version 1) (allow default) (deny network*) (deny system-socket)", 0, &error) != 0) {
-        fprintf(stderr, "netless: sandbox_init failed: %s\n", error ? error : "unknown error");
-        if (error) sandbox_free_error(error);
-        return 125;
-    }
-    execvp(argv[i + 1], &argv[i + 1]);
+    static char profile[] = "(version 1) (allow default) (deny network*) (deny system-socket)";
+    char **sandbox_argv = calloc((size_t)argc + 4, sizeof(char *));
+    if (!sandbox_argv) { perror("netless: calloc"); return 125; }
+    sandbox_argv[0] = (char *)"sandbox-exec";
+    sandbox_argv[1] = (char *)"-p";
+    sandbox_argv[2] = profile;
+    sandbox_argv[3] = (char *)"--";
+    for (int j = i + 1, k = 4; j < argc; ++j, ++k) sandbox_argv[k] = argv[j];
+    execv("/usr/bin/sandbox-exec", sandbox_argv);
     perror("netless: exec");
     return errno == ENOENT ? 127 : 126;
 }
