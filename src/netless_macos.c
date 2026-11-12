@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
         return 125;
     }
     char *error = NULL;
-    if (sandbox_init("(version 1) (deny network*)", 0, &error) != 0) {
+    if (sandbox_init("(version 1) (allow default) (deny network*)", 0, &error) != 0) {
         fprintf(stderr, "netless: sandbox_init failed: %s\n", error ? error : "unknown error");
         if (error) sandbox_free_error(error);
         return 125;
