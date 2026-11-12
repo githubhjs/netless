@@ -80,12 +80,12 @@ jobs:
         uses: vmactions/freebsd-vm@v1
         with:
           prepare: pkg install -y gmake python3
-          run: gmake clean all test && tar -czf netless-freebsd-x86_64.tar.gz -C build netless
+          run: gmake clean all test && tar -czf netless-freebsd-x86_64-best-effort.tar.gz -C build netless
           copyback: true
       - uses: actions/upload-artifact@v4
         with:
-          name: netless-freebsd-x86_64
-          path: netless-freebsd-x86_64.tar.gz
+          name: netless-freebsd-x86_64-best-effort
+          path: netless-freebsd-x86_64-best-effort.tar.gz
   publish:
     needs: [build, windows, openbsd, freebsd]
     runs-on: ubuntu-22.04
