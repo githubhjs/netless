@@ -7,6 +7,14 @@ make
 ./build/netless -- curl https://example.com
 ```
 
+For an additional Linux network-stack boundary, place netless inside a fresh Bubblewrap network namespace:
+
+```sh
+bwrap --unshare-net --bind / / --die-with-parent -- ./build/netless -- COMMAND ARGUMENTS
+```
+
+This requires `bwrap` and permission to create a network namespace. If the host or an outer container disallows namespaces, Bubblewrap fails before the target starts. The ordinary Linux backend still denies direct network syscalls in the full descendant process tree.
+
 The command still runs. `curl` will fail when it tries to create a socket. Ordinary file, process, and terminal operations remain available.
 
 On Linux, additional syscalls from the built-in table can be denied by name:
@@ -39,6 +47,7 @@ Userspace compatibility does not override the kernel requirement. Linux seccomp 
 ## What it enforces
 
 - Linux installs a seccomp-BPF filter before `exec`. The filter returns `EPERM` for socket creation and use syscalls, covering IPv4, IPv6, raw, packet, Unix-domain, and other socket families alike.
+- On x86-64, the Linux filter rejects tagged x32 calls and the legacy syscall-number range 512–547. The untagged range check is needed because kernels before Linux 5.4 incorrectly treated those numbers as x32 calls even without `__X32_SYSCALL_BIT`.
 - Denies `io_uring` setup, entry, and registration, so it cannot be used to submit socket operations through the asynchronous interface.
 - Denies `pidfd_getfd` and `ptrace`; closes inherited file descriptors above stderr; refuses to start if stdin, stdout, or stderr is a socket.
 - Sets `no_new_privs` before installing the filter. If setting the flag or installing the filter fails, the target command is never executed.
