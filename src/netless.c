@@ -104,13 +104,14 @@ static int install_filter(const int *extra, size_t extra_count) {
                                             offsetof(struct seccomp_data, arch));
     code[n++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,
                                             NETLESS_AUDIT_ARCH, 1, 0);
-    code[n++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS);
+    /* KILL_THREAD is supported by older seccomp-filter kernels than KILL_PROCESS. */
+    code[n++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_THREAD);
     code[n++] = (struct sock_filter)BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
                                             offsetof(struct seccomp_data, nr));
 #if defined(__x86_64__)
     code[n++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K,
                                             __X32_SYSCALL_BIT, 0, 1);
-    code[n++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS);
+    code[n++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_THREAD);
 #endif
     for (size_t i = 0; i < ARRAY_LEN(network_calls); ++i) {
         code[n++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,
@@ -134,8 +135,9 @@ static int install_filter(const int *extra, size_t extra_count) {
         perror("netless: PR_SET_NO_NEW_PRIVS");
         return -1;
     }
-    if (syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, 0, &program) != 0) {
-        perror("netless: installing seccomp filter");
+    /* PR_SET_SECCOMP predates the seccomp(2) syscall (Linux 3.17). */
+    if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &program) != 0) {
+        perror("netless: installing seccomp filter (kernel needs CONFIG_SECCOMP_FILTER)");
         return -1;
     }
     return 0;

@@ -21,7 +21,7 @@ The launcher needs the platform's native compiler and sandbox support. On Linux 
 
 | Platform | Enforcement | Architectures | Status |
 |---|---|---|---|
-| Linux | seccomp-BPF; blocks socket and `io_uring` syscalls | x86-64, AArch64 | Implemented and CI-tested |
+| Linux | seccomp-BPF; blocks socket and `io_uring` syscalls | x86-64, AArch64 | Dynamic binaries plus static musl binaries; strict when kernel seccomp-filter support is available |
 | macOS | Seatbelt sandbox via `sandbox-exec`; denies `network*` and `system-socket`; descendants inherit policy | Intel x86-64, Apple Silicon arm64 | Implemented and CI-tested; binaries published in releases |
 | OpenBSD | `pledge` without `inet`, `dns`, or `unix`; same promises applied to exec descendants | x86-64 release; other native architectures may build | Implemented and tested in an OpenBSD VM; release binary available |
 | FreeBSD | Jail with IPv4/IPv6 disabled and raw sockets denied | x86-64 release | Best effort; requires root, leaves AF_LOCAL available, and uses the host filesystem as the jail root |
@@ -29,6 +29,12 @@ The launcher needs the platform's native compiler and sandbox support. On Linux 
 | Windows 10/11 | AppContainer with no network capabilities; descendant processes inherit the container identity | x86-64 and ARM64 releases; tested on Windows Server 2022 x64 and Windows 11 ARM64 | Best effort; API baseline supports Windows 10/11, but Windows 10 is not yet a CI image; AppContainer also restricts filesystem, registry, and IPC access |
 
 “Unix-like” is not one portable security API. Linux, macOS, and OpenBSD use inherited kernel policies to deny network operations. FreeBSD and Windows use platform sandboxes with additional limitations; see the table above. Unsupported systems fail at build selection instead of silently falling back to an unconfined launch.
+
+### CentOS 6, 7, and 8 compatibility
+
+Use the `netless-linux-*-musl-static.tar.gz` assets for CentOS and other older glibc systems. These binaries have no glibc runtime dependency, so one artifact covers the glibc versions shipped with CentOS 6/7/8 instead of publishing separate glibc builds. CI runs their network-syscall and child-inheritance probe in CentOS 6, 7, and 8 userlands.
+
+Userspace compatibility does not override the kernel requirement. Linux seccomp filter mode and `no_new_privs` require a kernel with those features (upstream Linux 3.5 or newer). The stock CentOS 6 kernel is 2.6.32, so netless fails closed there and does not support network isolation on a stock CentOS 6 host. CentOS 7's 3.10 and CentOS 8's 4.18 kernel lines are new enough, subject to the kernel having seccomp filter support enabled. Container CI shares its host kernel; it verifies CentOS userland/glibc compatibility but is not evidence that a stock CentOS 6 kernel can enforce the filter.
 
 ## What it enforces
 
@@ -66,6 +72,7 @@ AppContainer requires no administrator rights for the network restriction itself
 ## References
 
 - [Linux kernel seccomp filter documentation](https://docs.kernel.org/userspace-api/seccomp_filter.html)
+- [Red Hat Enterprise Linux release dates and kernel versions](https://access.redhat.com/articles/3078)
 - [seccomp(2)](https://man7.org/linux/man-pages/man2/seccomp.2.html)
 - [PR_SET_NO_NEW_PRIVS(2)](https://man7.org/linux/man-pages/man2/PR_SET_NO_NEW_PRIVS.2const.html)
 - [OpenBSD pledge(2)](https://man.openbsd.org/pledge)
