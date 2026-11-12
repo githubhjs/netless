@@ -40,8 +40,6 @@ int main(int argc, char **argv) {
      * raw sockets and nonstandard address families explicitly. AF_LOCAL
      * remains available, so this is best-effort rather than a syscall-wide
      * denial of socket creation.
-     * AF_LOCAL remains available inside the jail; this backend is therefore
-     * explicitly best-effort for the broader no-socket contract.
      */
     size_t n = (size_t)argc + 10;
     char **jail_argv = calloc(n, sizeof(*jail_argv));
@@ -63,7 +61,7 @@ int main(int argc, char **argv) {
     if (!command) { perror("netless: malloc"); free(jail_argv); return 125; }
     (void)snprintf(command, command_len, "command=%s", argv[2]);
     jail_argv[k++] = command;
-    for (int i = 2; i < argc; ++i) jail_argv[k++] = argv[i];
+    for (int i = 3; i < argc; ++i) jail_argv[k++] = argv[i];
     jail_argv[k] = NULL;
     execv(jail_argv[0], jail_argv);
     perror("netless: exec jail");

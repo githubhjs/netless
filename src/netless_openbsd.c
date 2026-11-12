@@ -17,7 +17,8 @@ static int refuse_socket_stdio(void) {
 }
 
 int main(int argc, char **argv) {
-    const char *promises = "stdio rpath wpath cpath dpath tmppath proc exec prot_exec";
+    /* OpenBSD removed the tmppath promise; tmpfile users need ordinary path promises. */
+    const char *promises = "stdio rpath wpath cpath dpath proc exec prot_exec";
     int i = 1;
     if (i < argc && strcmp(argv[i], "--help") == 0) {
         puts("Usage: netless -- COMMAND [ARG...]\nRun COMMAND with OpenBSD pledge promises excluding inet, dns, and unix.");
