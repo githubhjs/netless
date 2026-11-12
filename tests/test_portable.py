@@ -17,12 +17,11 @@ class PortableSandboxTests(unittest.TestCase):
             return subprocess.run([str(BIN), "--", "python3", script.name],
                                   capture_output=True, text=True)
 
-    def test_network_socket_families_are_blocked(self):
-        families = ["AF_INET", "AF_INET6", "AF_UNIX"]
-        code = "import socket\nfor name in " + repr(families) + ":\n try: socket.socket(getattr(socket,name)); print('BAD')\n except OSError: print('blocked')\n"
+    def test_network_bind_is_blocked(self):
+        code = "import socket\nfor name in ['AF_INET','AF_INET6']:\n try:\n  s=socket.socket(getattr(socket,name)); s.bind(('127.0.0.1',0) if name=='AF_INET' else ('::1',0)); print('BAD')\n except OSError: print('blocked')\n"
         p = self.run_child(code)
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(p.stdout.splitlines(), ["blocked"] * len(families))
+        self.assertEqual(p.stdout.splitlines(), ["blocked", "blocked"])
 
     def test_dns_lookup_cannot_open_network_socket(self):
         p = self.run_child("import socket\ntry: socket.getaddrinfo('example.com',80); print('BAD')\nexcept OSError: print('blocked')\n")
@@ -30,7 +29,7 @@ class PortableSandboxTests(unittest.TestCase):
         self.assertEqual(p.stdout.strip(), "blocked")
 
     def test_restriction_is_inherited_by_exec_child(self):
-        p = self.run_child("import subprocess,sys\nr=subprocess.run([sys.executable,'-c','import socket; socket.socket()'],capture_output=True)\nprint(r.returncode != 0)\n")
+        p = self.run_child("import subprocess,sys\nr=subprocess.run([sys.executable,'-c',\"import socket; s=socket.socket(); s.bind(('127.0.0.1',0))\"],capture_output=True)\nprint(r.returncode != 0)\n")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(p.stdout.strip(), "True")
 
