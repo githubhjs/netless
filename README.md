@@ -21,8 +21,8 @@ The launcher needs the platform's native compiler and kernel sandbox support. Bu
 
 | Platform | Enforcement | Architectures | Status |
 |---|---|---|---|
-| Linux | seccomp-BPF; blocks socket and `io_uring` syscalls | x86-64, AArch64 | Implemented; local AArch64 tests pass, CI builds both |
-| macOS | Seatbelt sandbox profile `(deny network*)`; inherited by child processes | Intel x86-64, Apple Silicon arm64 | Native adapter; CI and release builds run on native macOS runners |
+| Linux | seccomp-BPF; blocks socket and `io_uring` syscalls | x86-64, AArch64 | Implemented and CI-tested |
+| macOS | Seatbelt sandbox via `sandbox-exec`; denies `network*` and `system-socket`; descendants inherit policy | Intel x86-64, Apple Silicon arm64 | Implemented and CI-tested; binaries published in releases |
 | OpenBSD | `pledge` without `inet`, `dns`, or `unix`; same promises applied to exec descendants | Native OpenBSD architectures | Adapter source included; needs native OpenBSD CI validation before binary release |
 | FreeBSD | — | — | Not supported yet: Capsicum capability mode alone does not deny creation of new network sockets |
 | Solaris / illumos, NetBSD, other Unix | — | — | Not supported yet; no verified kernel enforcement adapter |
