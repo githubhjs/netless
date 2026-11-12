@@ -36,10 +36,10 @@ jobs:
         include:
           - runner: windows-2022
             arch: x64
-            target: netless-windows-x86_64
+            target: netless-windows-x86_64-best-effort
           - runner: windows-11-arm
             arch: arm64
-            target: netless-windows-aarch64
+            target: netless-windows-aarch64-best-effort
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
