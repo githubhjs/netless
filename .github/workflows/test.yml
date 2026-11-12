@@ -2,7 +2,19 @@ name: test
 on: [push, pull_request]
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            artifact: linux-x86_64
+          - runner: ubuntu-22.04-arm
+            artifact: linux-aarch64
+          - runner: macos-15-intel
+            artifact: macos-x86_64
+          - runner: macos-15
+            artifact: macos-aarch64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - name: Build
