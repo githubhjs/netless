@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -18,6 +19,15 @@ static int refuse_socket_stdio(void) {
     return 0;
 }
 
+static int close_inherited_fds(void) {
+    struct rlimit limit;
+    if (getrlimit(RLIMIT_NOFILE, &limit) != 0) return -1;
+    rlim_t end = limit.rlim_cur == RLIM_INFINITY ? 1048576 : limit.rlim_cur;
+    for (rlim_t fd = 3; fd < end; ++fd)
+        if (close((int)fd) != 0 && errno != EBADF) return -1;
+    return 0;
+}
+
 int main(int argc, char **argv) {
     int i = 1;
     if (i < argc && strcmp(argv[i], "--help") == 0) {
@@ -29,7 +39,10 @@ int main(int argc, char **argv) {
         return 2;
     }
     if (refuse_socket_stdio() != 0) return 125;
-    closefrom(3);
+    if (close_inherited_fds() != 0) {
+        perror("netless: closing inherited descriptors");
+        return 125;
+    }
     char *error = NULL;
     if (sandbox_init("(version 1) (deny network*)", 0, &error) != 0) {
         fprintf(stderr, "netless: sandbox_init failed: %s\n", error ? error : "unknown error");
